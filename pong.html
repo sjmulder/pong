@@ -9,169 +9,213 @@
 	<canvas id="game-canvas" width="800" height="500"></canvas>
 	<script>
 		(function() {
+			function Vector(x, y) {
+				this.x = x || 0;
+				this.y = y || 0;
+			}
+			
+			Vector.max = function(vector1, vector2) {
+				return new Vector(
+					Math.max(vector1.x, vector2.x),
+					Math.max(vector1.y, vector2.y)
+				);
+			};
+
+			Vector.min = function(vector1, vector2) {
+				return new Vector(
+					Math.min(vector1.x, vector2.x),
+					Math.min(vector1.y, vector2.y)
+				);
+			};
+			
+			Vector.prototype.invert = function(axis) {
+				if (axis) {
+					var newVector = new Vector(this.x, this.y);
+					newVector[axis] = -newVector[axis];
+					return newVector;
+				} else {
+					return new Vector(-this.x, -this.y);
+				}
+			};
+			
+			Vector.prototype.add = function(vector) {
+				return new Vector(this.x + vector.x, this.y + vector.y);
+			};
+			
+			Vector.prototype.mulScalar = function(factor) {
+				return new Vector(this.x * factor, this.y * factor);
+			};
+			
+			Vector.prototype.mulVector = function(vector) {
+				return new Vector(this.x * vector.x, this.y * vector.y);
+			};
+			
+			Vector.prototype.divScalar = function(divider) {
+				return new Vector(this.x / divider, this.y / divider);
+			}
+			
+			Vector.prototype.cap = function(capVector) {
+				return Vector.max(capVector.invert(), Vector.min(this, capVector));
+			};
+			
+			function Rect(origin, size) {
+				this.origin = origin || new Vector();
+				this.size = size || new Vector();
+			}
+			
+			Rect.intersects = function(rect1, rect2) {
+				if (rect1.bottom() < rect2.top()) { return false; }
+				if (rect1.top() > rect2.bottom()) { return false; }
+				if (rect1.right() < rect2.left()) { return false; }
+				if (rect1.left() > rect2.right()) { return false; }
+				
+				return true;
+			};
+
+			Rect.prototype.left = function() { return this.origin.x; };
+			Rect.prototype.right = function() { return this.origin.x + this.size.x; };
+			Rect.prototype.top = function() { return this.origin.y; };
+			Rect.prototype.bottom = function() { return this.origin.y + this.size.y; };
+			
+			Rect.prototype.centeredIn = function(rect) {
+				return new Rect(
+					rect.size.divScalar(2).add(this.size.divScalar(2).invert()),
+					this.size
+				);
+			}
+			
+			function GameObject() {
+			}
+			
+			GameObject.prototype.stepMove = function(delta) {
+				this.rect.origin = this.rect.origin.add(this.velocity.mulScalar(delta));
+			}
+			
+			function Ball() {
+				this.velocity = new Vector();
+				this.rect = new Rect(new Vector(), new Vector(15, 15));
+			}
+			
+			Ball.prototype = new GameObject();
+			Ball.prototype.initialSpeed = new Vector(200, 200);
+			Ball.prototype.topSpeed = new Vector(600, 600);
+			Ball.prototype.speedIncreaseFactor = 1.1;
+			
+			Ball.prototype.randomiseDirection = function() {
+				this.velocity = new Vector(
+					(Math.round(Math.random()) * 2 - 1) * this.initialSpeed.x,
+					(Math.round(Math.random()) * 2 - 1) * this.initialSpeed.y
+				);
+			}
+			
+			Ball.prototype.bounceOffEdges = function(rect) {
+				var bounceTop = this.velocity.y < 0 && this.rect.top() <= rect.top();
+				var bounceBottom = this.velocity.y > 0 && this.rect.bottom() >= rect.bottom();
+				
+				if (bounceTop || bounceBottom) {
+					this.velocity = this.velocity.invert('y');
+				}
+			}
+			
+			Ball.prototype.increaseSpeed = function() {
+				this.velocity = this.velocity.mulScalar(
+					this.speedIncreaseFactor).cap(this.topSpeed);
+			}
+			
+			Ball.prototype.bounceOffPaddle = function(paddle) {
+				if (Rect.intersects(this.rect, paddle.rect)) {
+					this.velocity = this.velocity.invert('x');
+					this.increaseSpeed();
+				}
+			}
+			
+			function Paddle(player) {
+				this.velocity = new Vector();
+				this.rect = new Rect(new Vector(), new Vector(15, 75));
+				
+				this.moveUp = false;
+				this.moveDown = false;
+			}
+			
+			Paddle.prototype = new GameObject();
+			Paddle.prototype.speed = 400;
+			Paddle.prototype.paddleMargin = 50;
+			
+			Paddle.prototype.positionForPlayer = function(playerIndex, canvasRect) {
+				this.rect.origin = new Vector(
+					playerIndex == 0 ?
+						this.paddleMargin :
+						canvasRect.right() - this.paddleMargin - this.rect.size.x,
+					canvasRect.size.y / 2 - this.rect.size.y / 2
+				);
+			}
+			
+			Paddle.prototype.applyInput = function() {
+				this.velocity.y = 0;
+				if (this.moveUp)   { this.velocity.y -= this.speed; }
+				if (this.moveDown) { this.velocity.y += this.speed; }
+			}
+			
+			function GameState(canvasRect) {
+				this.ball = new Ball();
+				this.paddles = [
+					new Paddle(),
+					new Paddle()
+				];
+				
+				for (var i = 0; i < this.paddles.length; i++) {
+					this.paddles[i].positionForPlayer(i, canvasRect);
+				}
+				
+				this.ball.rect = this.ball.rect.centeredIn(canvasRect);
+				this.ball.randomiseDirection();
+				
+				this.gameObjects = [];
+				this.gameObjects.push(this.ball);
+				for (var i = 0; i < this.paddles.length; i++) {
+					this.gameObjects.push(this.paddles[i]);
+				}
+			}
+
 			var gameSettings = {
-				canvasSize: { x: 800, y: 500 },
-				paddles: {
-					paddleSize: { x: 15, y: 75 },
-					speed: 400
-				},
-				ball: {
-					ballSize: { x: 15, y: 15 },
-					speed: { x: 200, y: 200 },
-					maxSpeed: { x: 600, y: 600 },
-					speedAdjustmentFactor: 1.1
-				},
-				paddleMargin: 50,
 				startPause: 1,
 				stepSize: 0.02
 			};
 
 			var canvas = document.getElementById('game-canvas');
+			var canvasSize = new Vector(canvas.width, canvas.height);
+			var canvasRect = new Rect(new Vector(), canvasSize);
 			var context = canvas.getContext('2d');
-
-			function newPaddlePos(paddleIndex) {
-				var pos = {}
-				pos.y = gameSettings.canvasSize.y / 2 - gameSettings.paddles.paddleSize.y / 2;
-				if (paddleIndex == 0) {
-					pos.x = gameSettings.paddleMargin;
-				} else {
-					pos.x = gameSettings.canvasSize.x - gameSettings.paddleMargin - 
-						gameSettings.paddles.paddleSize.x;
-				}
-				return pos;
-			}
-			
-			function newBallPos() {
-				var canvasSize = gameSettings.canvasSize;
-				var ballSize = gameSettings.ball.ballSize;
-				return {
-					x: canvasSize.x / 2 - ballSize.x / 2,
-					y: canvasSize.y / 2 - ballSize.y / 2
-				};
-			}
-			
-			function newBallVelocity() {
-				var speed = gameSettings.ball.speed;
-				return {
-					x: (Math.round(Math.random()) * 2 - 1) * speed.x,
-					y: (Math.round(Math.random()) * 2 - 1) * speed.y
-				}
-			}
-			
-			function newGameState() {
-				return {
-					paddles: [
-						{ pos: newPaddlePos(0), moveUp: false, moveDown: false, vel: { x: 0, y: 0 } }, 
-						{ pos: newPaddlePos(1), moveUp: false, moveDown: false, vel: { x: 0, y: 0 } }
-					],
-					ball: {
-						pos: newBallPos(),
-						vel: newBallVelocity()
-					}
-				};
-			}
 			
 			function render(gameState) {
-				function clearCanvas() {
-					context.clearRect(0, 0, gameSettings.canvasSize.x, gameSettings.canvasSize.y);
-				}
-
-				function drawPaddle(pos) {
-					var paddleSize = gameSettings.paddles.paddleSize;
-					context.fillRect(pos.x, pos.y, paddleSize.x, paddleSize.y);
-				}
-
-				function drawBall(pos) {
-					var ballSize = gameSettings.ball.ballSize;
-					context.fillRect(pos.x, pos.y, ballSize.x, ballSize.y);
-				}
+				context.clearRect(0, 0, canvasSize.x, canvasSize.y);
 				
-				clearCanvas();
-				drawPaddle(gameState.paddles[0].pos);
-				drawPaddle(gameState.paddles[1].pos);
-				drawBall(gameState.ball.pos);
-			}
-			
-			function rectsIntersect(origin1, size1, origin2, size2) {
-				var right1 = origin1.x + size1.x;
-				var right2 = origin2.x + size2.x;
-				var bottom1 = origin1.y + size1.y;
-				var bottom2 = origin2.y + size2.y;
-
-				if (bottom1 < origin2.y) { return false; }
-				if (origin1.y > bottom2) { return false; }
-				if (right1 < origin2.x) { return false; }
-				if (origin1.x > right2) { return false; }
-				
-				return true;
+				for (var i = 0; i < gameState.gameObjects.length; i++) {
+					rect = gameState.gameObjects[i].rect;
+					context.fillRect(rect.origin.x, rect.origin.y, rect.size.x, rect.size.y);
+				}
 			}
 			
 			function step(gameState, delta, endCallback) {
-				function stepMove(obj) {
-					obj.pos.x += obj.vel.x * delta;
-					obj.pos.y += obj.vel.y * delta;
-				}
-				
-				function bounceBall(ball) {
-					var ballSize = gameSettings.ball.ballSize;
-					var canvasSize = gameSettings.canvasSize;
-					
-					if (ball.vel.y < 0 && ball.pos.y <= 0) {
-						ball.vel.y *= -1;
-					}
-					if (ball.vel.y > 0 && ball.pos.y + ballSize.y >= canvasSize.y) {
-						ball.vel.y *= -1;
-					}
-				}
-				
-				function ballOutOfScreen(ball) {
-					return ball.pos.x + gameSettings.ball.ballSize.x <= 0 ||
-						ball.pos.x >= gameSettings.canvasSize.x;
-				}
-				
-				function applyPlayerInput(paddle) {
-					var paddleSpeed = gameSettings.paddles.speed;
-					paddle.vel.y = 0;
-					if (paddle.moveUp)   { paddle.vel.y -= paddleSpeed; }
-					if (paddle.moveDown) { paddle.vel.y += paddleSpeed; }
-				}
-				
-				function checkCollissions(ball) {
-					var ballSize = gameSettings.ball.ballSize;
-					var paddleSize = gameSettings.paddles.paddleSize;
-					var p1 = gameState.paddles[0];
-					var p2 = gameState.paddles[1];
-					
-					var bounce = ball.vel.x < 0 ?
-						rectsIntersect(ball.pos, ballSize, p1.pos, paddleSize) :
-						rectsIntersect(ball.pos, ballSize, p2.pos, paddleSize);
-					
-					if (bounce) {
-						var factor = gameSettings.ball.speedAdjustmentFactor;
-						var maxSpeed = gameSettings.ball.maxSpeed;
-						
-						ball.vel.x = Math.min(maxSpeed.x, ball.vel.x * -factor);
-						ball.vel.y = Math.min(maxSpeed.y, ball.vel.y * factor);
-					}
-				}
-				
 				for (var i = 0; i < gameState.paddles.length; i++) {
-					var paddle = gameState.paddles[i];
-					applyPlayerInput(paddle);
-					stepMove(paddle);
+					gameState.paddles[i].applyInput();
 				}
 
-				stepMove(gameState.ball);
-				bounceBall(gameState.ball);
-				checkCollissions(gameState.ball);
+				for (var i = 0; i < gameState.gameObjects.length; i++) {
+					gameState.gameObjects[i].stepMove(delta);
+				}
+
+				gameState.ball.bounceOffEdges(canvasRect);
+				gameState.ball.bounceOffPaddle(gameState.paddles[
+						gameState.ball.velocity.x < 0 ? 0 : 1]);
 				
-				if (ballOutOfScreen(gameState.ball)) {
+				if (!Rect.intersects(gameState.ball.rect, canvasRect)) {
 					endCallback();
 				}
 			}
 
 			function playGame() {
-				var gameState = newGameState();
+				var gameState = new GameState(canvasRect);
 				
 				function keyChange(event, down) {
 					var p1 = gameState.paddles[0];
@@ -184,13 +228,8 @@
 					}
 				}
 				
-				function keyDown(event) {
-					keyChange(event, true);
-				}
-				
-				function keyUp(event) {
-					keyChange(event, false);
-				}
+				function keyDown(event) { keyChange(event, true); }
+				function keyUp(event) { keyChange(event, false); }
 				
 				window.addEventListener('keydown', keyDown, false);
 				window.addEventListener('keyup', keyUp, false);
@@ -200,7 +239,7 @@
 					var gameFinished = false;
 					step(gameState, gameSettings.stepSize, function() {
 						gameFinished = true;
-						gameState = newGameState();
+						gameState = new GameState(canvasRect);
 						render(gameState);
 						setTimeout(function() {
 							runGame();
