@@ -245,9 +245,10 @@
 				window.addEventListener('keyup', keyUp, false);
 				
 				function startGame() {
+					render(gameState);
 					setTimeout(function() { 
-						runGame(gameSettings.startPause * 1000); 
-					});
+						runGame(); 
+					}, gameSettings.startPause * 1000);
 				}
 				
 				function restartGame() {
