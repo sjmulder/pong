@@ -175,6 +175,8 @@
 				for (var i = 0; i < this.paddles.length; i++) {
 					this.gameObjects.push(this.paddles[i]);
 				}
+				
+				this.finished = false;
 			}
 
 			var gameSettings = {
@@ -196,7 +198,7 @@
 				}
 			}
 			
-			function step(gameState, delta, endCallback) {
+			function step(gameState, delta) {
 				for (var i = 0; i < gameState.paddles.length; i++) {
 					gameState.paddles[i].applyInput();
 				}
@@ -210,7 +212,7 @@
 						gameState.ball.velocity.x < 0 ? 0 : 1]);
 				
 				if (!Rect.intersects(gameState.ball.rect, canvasRect)) {
-					endCallback();
+					gameState.finished = true;
 				}
 			}
 
@@ -234,28 +236,29 @@
 				window.addEventListener('keydown', keyDown, false);
 				window.addEventListener('keyup', keyUp, false);
 				
-				function runGame() {
-					render(gameState);
-					var gameFinished = false;
-					step(gameState, gameSettings.stepSize, function() {
-						gameFinished = true;
-						gameState = new GameState(canvasRect);
-						render(gameState);
-						setTimeout(function() {
-							runGame();
-						}, gameSettings.startPause * 1000)
+				function startGame() {
+					setTimeout(function() { 
+						runGame(gameSettings.startPause * 1000); 
 					});
-					if (!gameFinished) {
-						setTimeout(function() { 
-							runGame(); 
-						}, gameSettings.stepSize * 1000);
-					}
+				}
+				
+				function restartGame() {
+					gameState = new GameState(canvasRect);
+					startGame();
+				}
+				
+				function runGame() {
+					var interval = setInterval(function() {
+						render(gameState);
+						step(gameState, gameSettings.stepSize);
+						if (gameState.finished) {
+							clearInterval(interval);
+							restartGame();
+						}
+					}, gameSettings.stepSize * 1000);						
 				};
 				
-				render(gameState);
-				setTimeout(function() {
-					runGame();
-				}, gameSettings.startPause * 1000);
+				startGame();
 			}
 			
 			playGame();
