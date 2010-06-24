@@ -20,53 +20,159 @@
 	<p>Use W and S to move the left paddle, and the up and down arrows to move the right paddle.</p>
 	<script>
 		(function() {
-			function Vector(x, y) {
+			function Vector(x, y, z, w) {
 				this.x = x || 0;
 				this.y = y || 0;
+				this.z = z || 0;
+				this.w = w || 0;
 			}
 			
 			Vector.max = function(vector1, vector2) {
 				return new Vector(
 					Math.max(vector1.x, vector2.x),
-					Math.max(vector1.y, vector2.y)
+					Math.max(vector1.y, vector2.y),
+					Math.max(vector1.z, vector2.z),
+					Math.max(vector1.w, vector2.w)
 				);
 			};
 
 			Vector.min = function(vector1, vector2) {
 				return new Vector(
 					Math.min(vector1.x, vector2.x),
-					Math.min(vector1.y, vector2.y)
+					Math.min(vector1.y, vector2.y),
+					Math.min(vector1.z, vector2.z),
+					Math.min(vector1.w, vector2.w)
 				);
 			};
 			
 			Vector.prototype.invert = function(axis) {
 				if (axis) {
-					var newVector = new Vector(this.x, this.y);
+					var newVector = new Vector(this.x, this.y, this.z, this.w);
 					newVector[axis] = -newVector[axis];
 					return newVector;
 				} else {
-					return new Vector(-this.x, -this.y);
+					return new Vector(-this.x, -this.y, -this.z, -this.w);
 				}
 			};
 			
 			Vector.prototype.add = function(vector) {
-				return new Vector(this.x + vector.x, this.y + vector.y);
+				return new Vector(
+					this.x + vector.x,
+					this.y + vector.y,
+					this.z + vector.z, 
+					this.w + vector.w
+				);
 			};
 			
 			Vector.prototype.mulScalar = function(factor) {
-				return new Vector(this.x * factor, this.y * factor);
+				return new Vector(
+					this.x * factor, 
+					this.y * factor,
+					this.z * factor,
+					this.w * factor
+				);
 			};
 			
 			Vector.prototype.mulVector = function(vector) {
-				return new Vector(this.x * vector.x, this.y * vector.y);
+				return new Vector(
+					this.x * vector.x, 
+					this.y * vector.y,
+					this.z * vector.z,
+					this.w * vector.w
+				);
 			};
 			
 			Vector.prototype.divScalar = function(divider) {
-				return new Vector(this.x / divider, this.y / divider);
+				return new Vector(
+					this.x / divider, 
+					this.y / divider,
+					this.z / divider,
+					this.w / divider
+				);
+			};
+			 
+			Vector.prototype.dot = function(b) {
+				var a = this;
+				return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 			}
 			
 			Vector.prototype.cap = function(capVector) {
 				return Vector.max(capVector.invert(), Vector.min(this, capVector));
+			};
+			
+			function Matrix4(elements) {
+				this.elements = elements || [
+					1, 0, 0, 0,
+					0, 1, 0, 0,
+					0, 0, 1, 0,
+					0, 0, 0, 1
+				];
+			}
+			
+			Matrix4.prototype.at = function(x, y) {
+				return this.elements[y * 4 + x];
+			};
+			
+			Matrix4.prototype.set = function(x, y, value) {
+				this.elements[y * 4 + x] = value;
+			};
+			
+			Matrix4.prototype.row = function(row) {
+				return new Vector(
+					this.at(0, row),
+					this.at(1, row),
+					this.at(2, row),
+					this.at(3, row)
+				);
+			};
+			
+			Matrix4.prototype.col = function(col) {
+				return new Vector(
+					this.at(col, 0),
+					this.at(col, 1),
+					this.at(col, 2),
+					this.at(col, 3)
+				);
+			};
+			
+			Matrix4.prototype.crossMatrix = function(b) {
+				var a = this;
+				return new Matrix4([
+					a.row(0).dot(b.col(0)), a.row(0).dot(b.col(1)), a.row(0).dot(b.col(2)), a.row(0).dot(b.col(3)),
+					a.row(1).dot(b.col(0)), a.row(1).dot(b.col(1)), a.row(1).dot(b.col(2)), a.row(1).dot(b.col(3)),
+					a.row(2).dot(b.col(0)), a.row(2).dot(b.col(1)), a.row(2).dot(b.col(2)), a.row(2).dot(b.col(3)),
+					a.row(3).dot(b.col(0)), a.row(3).dot(b.col(1)), a.row(3).dot(b.col(2)), a.row(3).dot(b.col(3))
+				]);
+			};
+			
+			Matrix4.prototype.crossVector = function(b) {
+				var a = this;
+				return new Vector(
+					a.row(0).dot(b),
+					a.row(1).dot(b),
+					a.row(2).dot(b),
+					a.row(3).dot(b)
+				)
+			};
+			
+			Matrix4.prototype.translate = function(vector) {
+				return this.crossMatrix(new Matrix4([
+					1, 0, 0, vector.x,
+					0, 1, 0, vector.y,
+					0, 0, 1, vector.z,
+					0, 0, 0, 1
+				]));
+			};
+			
+			Matrix4.prototype.rotate = function(a, x, y, z) {
+				var s = Math.sin(a);
+				var c = Math.cos(a);
+				return this.crossMatrix(new Matrix4([
+					x*x+(1-x*x)*c, x*y*(1-c)-z*s, x*z*(1-c)*y*s, 0,
+					x*y*(1-c)+z*s, y*y+(1-y*y)*c, y*z*(1-c)*x*s, 0,
+					x*z*(1-c)*y*s, y*z*(1-c)+x*s, z*z+(1-z*z)*c, 0,
+					0, 0, 0, 1
+				]));
 			};
 			
 			function Rect(origin, size) {
@@ -210,12 +316,42 @@
 			var context = canvas.getContext('2d');
 			
 			function render(gameState) {
-				context.clearRect(0, 0, canvasSize.x, canvasSize.y);
+				var transform = new Matrix4();
+				transform = transform.translate(canvasSize.divScalar(2));
+				transform = transform.rotate(Math.PI / 32, 0, 0, 1);
+				transform = transform.translate(canvasSize.divScalar(2).invert());
 				
-				for (var i = 0; i < gameState.gameObjects.length; i++) {
-					rect = gameState.gameObjects[i].rect;
-					context.fillRect(rect.origin.x, rect.origin.y, rect.size.x, rect.size.y);
+				context.clearRect(0, 0, canvasSize.x, canvasSize.y);
+
+				function drawRect(rect, fill) {
+					var points = [
+						transform.crossVector(new Vector(rect.left(), rect.top(), 1, 1)),
+						transform.crossVector(new Vector(rect.right(), rect.top(), 1, 1)),
+						transform.crossVector(new Vector(rect.right(), rect.bottom(), 1, 1)),
+						transform.crossVector(new Vector(rect.left(), rect.bottom(), 1, 1))
+					];
+
+					context.beginPath();
+					context.moveTo(points[0].x, points[0].y);
+					context.lineTo(points[1].x, points[1].y);
+					context.lineTo(points[2].x, points[2].y);
+					context.lineTo(points[3].x, points[3].y);
+					context.lineTo(points[0].x, points[0].y);
+					
+					if (fill) {
+						context.fill();
+					} else {
+						context.stroke();
+					}
+					
+					context.closePath();
 				}
+
+				for (var i = 0; i < gameState.gameObjects.length; i++) {
+					drawRect(gameState.gameObjects[i].rect, true);
+				}
+				
+				drawRect(canvasRect, false);
 			}
 			
 			function step(gameState, delta) {
