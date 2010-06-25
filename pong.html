@@ -10,9 +10,6 @@
 		required by law. 
 	-->
 	<title>Pong</title>
-	<style>
-		canvas { border: 1px solid gray; }
-	</style>
 	<h1>Pong</h1>
 	<canvas id="game-canvas" width="800" height="500">
 		<p>You require additional vespi- a browser that supports HTML5. Try <a href="http://google.com/chrome">Google Chrome</a>!</p>
@@ -90,14 +87,18 @@
 					this.w / divider
 				);
 			};
-			 
+			
 			Vector.prototype.dot = function(b) {
 				var a = this;
 				return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
-			}
+			};
 			
 			Vector.prototype.cap = function(capVector) {
 				return Vector.max(capVector.invert(), Vector.min(this, capVector));
+			};
+
+			Vector.prototype.perspective = function(depth) {
+				return this.divScalar(1 + this.z / depth);
 			};
 			
 			function Matrix4(elements) {
@@ -315,20 +316,30 @@
 			var canvasRect = new Rect(new Vector(), canvasSize);
 			var context = canvas.getContext('2d');
 			
+			context.translate(canvasSize.x / 2, canvasSize.y / 2);
+			
 			function render(gameState) {
 				var transform = new Matrix4();
-				transform = transform.translate(canvasSize.divScalar(2));
-				transform = transform.rotate(Math.PI / 32, 0, 0, 1);
+				transform = transform.translate(new Vector(0, -30, 150));
+				transform = transform.rotate(Math.PI / -6, 1, 0, 0);
 				transform = transform.translate(canvasSize.divScalar(2).invert());
 				
-				context.clearRect(0, 0, canvasSize.x, canvasSize.y);
+				var depth = canvasSize.y;
+				
+				context.clearRect(-canvasSize.x / 2, -canvasSize.y / 2, canvasSize.x, canvasSize.y);
 
+				function applyTransform(vector) {
+					return transform.crossVector(vector).perspective(depth);
+				}
+				
+				
+				
 				function drawRect(rect, fill) {
 					var points = [
-						transform.crossVector(new Vector(rect.left(), rect.top(), 1, 1)),
-						transform.crossVector(new Vector(rect.right(), rect.top(), 1, 1)),
-						transform.crossVector(new Vector(rect.right(), rect.bottom(), 1, 1)),
-						transform.crossVector(new Vector(rect.left(), rect.bottom(), 1, 1))
+						applyTransform(new Vector(rect.left(), rect.top(), 0, 1)),
+						applyTransform(new Vector(rect.right(), rect.top(), 0, 1)),
+						applyTransform(new Vector(rect.right(), rect.bottom(), 0, 1)),
+						applyTransform(new Vector(rect.left(), rect.bottom(), 0, 1))
 					];
 
 					context.beginPath();
