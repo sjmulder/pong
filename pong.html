@@ -98,7 +98,7 @@
 			};
 
 			Vector.prototype.perspective = function(depth) {
-				return this.divScalar(1 + this.z / depth);
+				return this.divScalar(1 - this.z / depth);
 			};
 			
 			function Matrix4(elements) {
@@ -194,6 +194,8 @@
 			Rect.prototype.right = function() { return this.origin.x + this.size.x; };
 			Rect.prototype.top = function() { return this.origin.y; };
 			Rect.prototype.bottom = function() { return this.origin.y + this.size.y; };
+			Rect.prototype.front = function() { return this.origin.z; };
+			Rect.prototype.back = function() { return this.origin.z + this.size.z; }
 			
 			Rect.prototype.centeredIn = function(rect) {
 				return new Rect(
@@ -211,7 +213,7 @@
 			
 			function Ball() {
 				this.velocity = new Vector();
-				this.rect = new Rect(new Vector(), new Vector(15, 15));
+				this.rect = new Rect(new Vector(), new Vector(15, 15, 15));
 			}
 			
 			Ball.prototype = new GameObject();
@@ -249,7 +251,7 @@
 			
 			function Paddle(player) {
 				this.velocity = new Vector();
-				this.rect = new Rect(new Vector(), new Vector(15, 75));
+				this.rect = new Rect(new Vector(), new Vector(15, 75, 15));
 				
 				this.moveUp = false;
 				this.moveDown = false;
@@ -312,7 +314,7 @@
 			};
 
 			var canvas = document.getElementById('game-canvas');
-			var canvasSize = new Vector(canvas.width, canvas.height);
+			var canvasSize = new Vector(canvas.width, canvas.height, 5);
 			var canvasRect = new Rect(new Vector(), canvasSize);
 			var context = canvas.getContext('2d');
 			
@@ -320,8 +322,8 @@
 			
 			function render(gameState) {
 				var transform = new Matrix4();
-				transform = transform.translate(new Vector(0, -30, 150));
-				transform = transform.rotate(Math.PI / -6, 1, 0, 0);
+				transform = transform.translate(new Vector(0, -30, -150));
+				//transform = transform.rotate(Math.PI / 6, 1, 0, 0);
 				transform = transform.translate(canvasSize.divScalar(2).invert());
 				
 				var depth = canvasSize.y;
@@ -332,37 +334,48 @@
 					return transform.crossVector(vector).perspective(depth);
 				}
 				
-				
-				
-				function drawRect(rect, fill) {
-					var points = [
-						applyTransform(new Vector(rect.left(), rect.top(), 0, 1)),
-						applyTransform(new Vector(rect.right(), rect.top(), 0, 1)),
-						applyTransform(new Vector(rect.right(), rect.bottom(), 0, 1)),
-						applyTransform(new Vector(rect.left(), rect.bottom(), 0, 1))
-					];
-
+				function drawRect(points, fill) {
 					context.beginPath();
 					context.moveTo(points[0].x, points[0].y);
 					context.lineTo(points[1].x, points[1].y);
 					context.lineTo(points[2].x, points[2].y);
 					context.lineTo(points[3].x, points[3].y);
 					context.lineTo(points[0].x, points[0].y);
-					
+				
 					if (fill) {
 						context.fill();
 					} else {
 						context.stroke();
 					}
-					
+				
 					context.closePath();
+				}
+			
+				function drawBlock(rect, fill) {
+					var points = [
+						applyTransform(new Vector(rect.left(),  rect.top(),    rect.front(), 1)),
+						applyTransform(new Vector(rect.right(), rect.top(),    rect.front(), 1)),
+						applyTransform(new Vector(rect.right(), rect.bottom(), rect.front(), 1)),
+						applyTransform(new Vector(rect.left(),  rect.bottom(), rect.front(), 1)),
+						applyTransform(new Vector(rect.left(),  rect.top(),    rect.back(), 1)),
+						applyTransform(new Vector(rect.right(), rect.top(),    rect.back(), 1)),
+						applyTransform(new Vector(rect.right(), rect.bottom(), rect.back(), 1)),
+						applyTransform(new Vector(rect.left(),  rect.bottom(), rect.back(), 1))
+					];
+					
+					drawRect([points[0], points[1], points[2], points[3]], fill);
+					drawRect([points[4], points[5], points[6], points[7]], fill);
+					drawRect([points[0], points[1], points[5], points[4]], fill);
+					drawRect([points[2], points[3], points[7], points[6]], fill);
+					drawRect([points[0], points[3], points[7], points[4]], fill);
+					drawRect([points[1], points[2], points[6], points[5]], fill);
 				}
 
 				for (var i = 0; i < gameState.gameObjects.length; i++) {
-					drawRect(gameState.gameObjects[i].rect, true);
+					drawBlock(gameState.gameObjects[i].rect, false);
 				}
 				
-				drawRect(canvasRect, false);
+				drawBlock(canvasRect, false);
 			}
 			
 			function step(gameState, delta) {
